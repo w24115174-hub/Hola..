@@ -1,0 +1,56 @@
+name: bot
+
+on:
+  workflow_dispatch:
+    inputs:
+      sessionid:
+        description: "Cookie sessionid de instagram.com"
+        required: true
+      target:
+        description: "Cuenta objetivo (sin @)"
+        required: true
+      max:
+        description: "Follows en esta ejecución"
+        default: "30"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install instagrapi==2.1.2
+
+      - run: python - <<'PY'
+        import os, random, time
+        from instagrapi import Client
+
+        cl = Client()
+        cl.login_by_sessionid(os.environ["IG_SESSIONID"])
+
+        target = os.environ["TARGET"].lstrip("@")
+        maxf   = int(os.environ["MAX"])
+
+        ya_sigo = {u.username for u in cl.user_following(cl.user_id, amount=0).values()}
+        user_id = cl.user_id_from_username(target)
+
+        n = 0
+        for user in cl.user_followers(user_id, amount=maxf * 4).values():
+            if n >= maxf:
+                break
+            if user.username in ya_sigo or user.is_private:
+                continue
+            cl.user_follow(user.pk)
+            n += 1
+            print(f"seguido @{user.username} ({n}/{maxf})")
+            time.sleep(random.randint(20, 60))
+
+        print(f"listo: {n} follows en @{target}")
+        PY
+        env:
+          IG_SESSIONID: ${{ inputs.sessionid }}
+          TARGET: ${{ inputs.target }}
+          MAX: ${{ inputs.max }}
